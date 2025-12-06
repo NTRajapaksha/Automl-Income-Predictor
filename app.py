@@ -1,271 +1,515 @@
 """
-Streamlit Web Interface for AutoML Pipeline
+AutoML Inference Application - GitHub Codespaces
+Load pre-trained model and make predictions
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-from automl_pipeline import AdvancedAutoML
+import pickle
+import json
 import plotly.express as px
 import plotly.graph_objects as go
-from io import StringIO
+from plotly.subplots import make_subplots
+import os
 
-st.set_page_config(page_title="Advanced AutoML", page_icon="🤖", layout="wide")
-
-# Title and description
-st.title("🤖 Advanced AutoML Pipeline")
-st.markdown("""
-This interactive dashboard runs a complete AutoML pipeline that:
-- Preprocesses your data automatically
-- Trains multiple ML models with hyperparameter tuning
-- Compares model performance
-- Provides detailed insights and visualizations
-""")
-
-# Sidebar for configuration
-st.sidebar.header("Configuration")
-
-# Data source selection
-data_source = st.sidebar.radio(
-    "Select Data Source",
-    ["Default (Adult Income)", "Upload CSV"]
+# Page configuration
+st.set_page_config(
+    page_title="Income Predictor",
+    page_icon="💰",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state
-if 'automl' not in st.session_state:
-    st.session_state.automl = None
-if 'results' not in st.session_state:
-    st.session_state.results = None
+# Custom CSS
+st.markdown("""
+    <style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 1rem;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# File upload
-uploaded_file = None
-if data_source == "Upload CSV":
-    uploaded_file = st.sidebar.file_uploader("Upload your CSV file", type=['csv'])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.sidebar.success(f"Loaded {df.shape[0]} rows, {df.shape[1]} columns")
+# ============================================================================
+# LOAD MODEL AND METADATA
+# ============================================================================
+
+@st.cache_resource
+def load_model_and_metadata():
+    """Load the trained model, preprocessor, and metadata"""
+    try:
+        # Load model
+        with open('best_model.pkl', 'rb') as f:
+            model = pickle.load(f)
         
-        # Select target column
-        target_col = st.sidebar.selectbox("Select Target Column", df.columns)
-    else:
-        st.info("👆 Please upload a CSV file to continue")
+        # Load preprocessor
+        with open('preprocessor.pkl', 'rb') as f:
+            preprocessor = pickle.load(f)
+        
+        # Load metadata
+        with open('model_metadata.json', 'r') as f:
+            metadata = json.load(f)
+        
+        # Load comparison data
+        comparison_df = pd.read_csv('model_comparison.csv')
+        
+        return model, preprocessor, metadata, comparison_df
+    except FileNotFoundError as e:
+        st.error(f"""
+        ⚠️ **Missing Required Files!**
+        
+        Please upload the following files from your Colab training:
+        - best_model.pkl
+        - preprocessor.pkl
+        - model_metadata.json
+        - model_comparison.csv
+        
+        Missing file: {str(e)}
+        """)
         st.stop()
-else:
-    target_col = 'income'
 
-# Task type
-task_type = st.sidebar.selectbox("Task Type", ["classification", "regression"])
+# Load everything
+model, preprocessor, metadata, comparison_df = load_model_and_metadata()
 
-# Run button
-if st.sidebar.button("🚀 Run AutoML Pipeline", type="primary"):
-    with st.spinner("Running AutoML pipeline... This may take a few minutes."):
-        try:
-            # Initialize AutoML
-            automl = AdvancedAutoML(target_column=target_col, task_type=task_type)
-            
-            # Load data
-            if data_source == "Upload CSV":
-                automl.df = pd.read_csv(uploaded_file)
-            else:
-                automl.load_data()
-            
-            # Run pipeline
-            progress_bar = st.progress(0)
-            st.text("Preprocessing data...")
-            automl.preprocess()
-            progress_bar.progress(20)
-            
-            st.text("Defining models...")
-            automl.define_models()
-            progress_bar.progress(40)
-            
-            st.text("Training and tuning models...")
-            automl.train_and_tune()
-            progress_bar.progress(80)
-            
-            st.text("Generating visualizations...")
-            automl.visualize_results()
-            progress_bar.progress(100)
-            
-            # Store in session state
-            st.session_state.automl = automl
-            st.session_state.results = automl.results
-            
-            st.success("✅ AutoML pipeline completed successfully!")
-            st.balloons()
-            
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
-            st.stop()
+# ============================================================================
+# HEADER
+# ============================================================================
 
-# Display results if available
-if st.session_state.results:
-    automl = st.session_state.automl
-    results = st.session_state.results
+st.markdown('<h1 class="main-header">💰 Income Prediction System</h1>', unsafe_allow_html=True)
+st.markdown(f"""
+<div style='text-align: center; padding: 1rem;'>
+    <p style='font-size: 1.2rem;'>
+        Using <b>{metadata['best_model_name']}</b> trained on UCI Adult Income Dataset
+        <br>
+        <span style='color: #667eea;'>Accuracy: {metadata['accuracy']:.2%}</span> | 
+        <span style='color: #764ba2;'>AUC: {metadata['auc']:.2%}</span>
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# SIDEBAR - MODEL INFO
+# ============================================================================
+
+with st.sidebar:
+    st.header("📊 Model Information")
     
-    # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🏆 Best Model", "📈 Comparisons", "🔍 Details"])
+    st.metric("Model", metadata['best_model_name'])
+    st.metric("Test Accuracy", f"{metadata['accuracy']:.2%}")
+    st.metric("AUC Score", f"{metadata['auc']:.2%}")
     
-    with tab1:
-        st.header("Pipeline Overview")
+    with st.expander("🔧 Best Hyperparameters"):
+        st.json(metadata['best_params'])
+    
+    with st.expander("📈 All Model Results"):
+        st.dataframe(comparison_df, use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("### 🎯 About")
+    st.info("""
+    This app uses a machine learning model trained on the UCI Adult Income dataset 
+    to predict whether a person's income exceeds $50K/year.
+    """)
+
+# ============================================================================
+# MAIN TABS
+# ============================================================================
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🎯 Single Prediction", 
+    "📊 Batch Predictions", 
+    "📈 Model Analytics",
+    "🧪 What-If Analysis"
+])
+
+# ============================================================================
+# TAB 1: SINGLE PREDICTION
+# ============================================================================
+
+with tab1:
+    st.header("Make a Single Prediction")
+    st.markdown("Enter the details below to predict income level:")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("Demographics")
+        age = st.slider("Age", 17, 90, 30)
+        sex = st.selectbox("Sex", ["Male", "Female"])
+        race = st.selectbox("Race", [
+            "White", "Black", "Asian-Pac-Islander", 
+            "Amer-Indian-Eskimo", "Other"
+        ])
+        native_country = st.selectbox("Native Country", [
+            "United-States", "Mexico", "Philippines", "Germany", 
+            "Puerto-Rico", "Canada", "India", "Other"
+        ])
+    
+    with col2:
+        st.subheader("Education & Work")
+        education = st.selectbox("Education", [
+            "Bachelors", "HS-grad", "11th", "Masters", "9th",
+            "Some-college", "Assoc-acdm", "Assoc-voc", "7th-8th",
+            "Doctorate", "Prof-school", "5th-6th", "10th", "1st-4th",
+            "Preschool", "12th"
+        ])
+        education_num = st.slider("Years of Education", 1, 16, 10)
+        workclass = st.selectbox("Work Class", [
+            "Private", "Self-emp-not-inc", "Local-gov", 
+            "State-gov", "Self-emp-inc", "Federal-gov",
+            "Without-pay", "Never-worked"
+        ])
+        occupation = st.selectbox("Occupation", [
+            "Prof-specialty", "Craft-repair", "Exec-managerial",
+            "Adm-clerical", "Sales", "Other-service", "Machine-op-inspct",
+            "Transport-moving", "Handlers-cleaners", "Farming-fishing",
+            "Tech-support", "Protective-serv", "Priv-house-serv", "Armed-Forces"
+        ])
+    
+    with col3:
+        st.subheader("Financial & Family")
+        hours_per_week = st.slider("Hours per Week", 1, 99, 40)
+        marital_status = st.selectbox("Marital Status", [
+            "Married-civ-spouse", "Never-married", "Divorced",
+            "Separated", "Widowed", "Married-spouse-absent",
+            "Married-AF-spouse"
+        ])
+        relationship = st.selectbox("Relationship", [
+            "Husband", "Wife", "Own-child", "Not-in-family",
+            "Other-relative", "Unmarried"
+        ])
+        capital_gain = st.number_input("Capital Gain", 0, 100000, 0)
+        capital_loss = st.number_input("Capital Loss", 0, 5000, 0)
+        fnlwgt = st.number_input("Final Weight (fnlwgt)", 10000, 1500000, 200000)
+    
+    if st.button("🔮 Predict Income", type="primary", use_container_width=True):
+        # Create input dataframe
+        input_data = pd.DataFrame({
+            'age': [age],
+            'workclass': [workclass],
+            'fnlwgt': [fnlwgt],
+            'education': [education],
+            'education-num': [education_num],
+            'marital-status': [marital_status],
+            'occupation': [occupation],
+            'relationship': [relationship],
+            'race': [race],
+            'sex': [sex],
+            'capital-gain': [capital_gain],
+            'capital-loss': [capital_loss],
+            'hours-per-week': [hours_per_week],
+            'native-country': [native_country]
+        })
+        
+        # Preprocess
+        X_pred, _ = preprocessor.preprocess(input_data, target_col='income', is_training=False)
+        
+        # Make prediction
+        prediction = model.predict(X_pred)[0]
+        prediction_proba = model.predict_proba(X_pred)[0]
+        
+        # Display results
+        st.markdown("---")
+        st.subheader("Prediction Results")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Best Model", automl.best_model)
+            income_class = ">50K" if prediction == 1 else "≤50K"
+            st.markdown(f"""
+            <div style='text-align: center; padding: 2rem; background-color: {"#d4edda" if prediction == 1 else "#f8d7da"}; border-radius: 10px;'>
+                <h2 style='margin: 0;'>Predicted Income</h2>
+                <h1 style='margin: 0; color: {"#155724" if prediction == 1 else "#721c24"};'>{income_class}</h1>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col2:
-            st.metric("Best Accuracy", f"{automl.best_score:.4f}")
+            st.metric("Probability ≤50K", f"{prediction_proba[0]:.1%}")
+        
         with col3:
-            st.metric("Models Trained", len(results))
+            st.metric("Probability >50K", f"{prediction_proba[1]:.1%}")
         
-        # Dataset info
-        st.subheader("Dataset Information")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Samples", automl.df.shape[0])
-        col2.metric("Features", automl.df.shape[1] - 1)
-        col3.metric("Training Samples", automl.X_train.shape[0])
-        col4.metric("Test Samples", automl.X_test.shape[0])
+        # Probability gauge
+        fig = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = prediction_proba[1] * 100,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Confidence Score", 'font': {'size': 24}},
+            delta = {'reference': 50},
+            gauge = {
+                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "darkblue"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 30], 'color': '#ffcccc'},
+                    {'range': [30, 70], 'color': '#ffffcc'},
+                    {'range': [70, 100], 'color': '#ccffcc'}],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 50}}))
         
-        # Quick comparison
-        st.subheader("Model Performance Summary")
-        comparison_df = pd.DataFrame({
-            'Model': list(results.keys()),
-            'Test Accuracy': [r['test_accuracy'] for r in results.values()],
-            'CV Score': [r['cv_score'] for r in results.values()],
-            'AUC': [r['auc'] for r in results.values()]
-        }).sort_values('Test Accuracy', ascending=False)
-        
-        st.dataframe(comparison_df, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+# ============================================================================
+# TAB 2: BATCH PREDICTIONS
+# ============================================================================
+
+with tab2:
+    st.header("Batch Predictions")
+    st.markdown("Upload a CSV file with multiple records for batch predictions")
     
-    with tab2:
-        st.header(f"Best Model: {automl.best_model}")
-        
-        best_result = results[automl.best_model]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Performance Metrics")
-            st.metric("Test Accuracy", f"{best_result['test_accuracy']:.4f}")
-            st.metric("Cross-Validation Score", f"{best_result['cv_score']:.4f}")
-            st.metric("AUC Score", f"{best_result['auc']:.4f}")
-            
-            st.subheader("Best Hyperparameters")
-            st.json(best_result['best_params'])
-        
-        with col2:
-            st.subheader("Confusion Matrix")
-            from sklearn.metrics import confusion_matrix
-            cm = confusion_matrix(automl.y_test, best_result['predictions'])
-            
-            fig = px.imshow(cm, 
-                          labels=dict(x="Predicted", y="Actual", color="Count"),
-                          x=['Class 0', 'Class 1'],
-                          y=['Class 0', 'Class 1'],
-                          text_auto=True,
-                          color_continuous_scale='Blues')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Feature importance (if available)
-        if automl.best_model in ['Random Forest', 'Gradient Boosting']:
-            st.subheader("Feature Importance")
-            feature_imp = pd.DataFrame({
-                'Feature': automl.X_train.columns,
-                'Importance': best_result['model'].feature_importances_
-            }).sort_values('Importance', ascending=False).head(15)
-            
-            fig = px.bar(feature_imp, x='Importance', y='Feature', 
-                        orientation='h',
-                        title='Top 15 Most Important Features')
-            st.plotly_chart(fig, use_container_width=True)
+    uploaded_file = st.file_uploader("Upload CSV File", type=['csv'])
     
-    with tab3:
-        st.header("Model Comparisons")
+    if uploaded_file is not None:
+        # Load data
+        batch_df = pd.read_csv(uploaded_file)
         
-        # Accuracy comparison
-        fig1 = px.bar(comparison_df, x='Model', y='Test Accuracy',
-                     title='Test Accuracy Comparison',
-                     color='Test Accuracy',
-                     color_continuous_scale='Viridis')
-        st.plotly_chart(fig1, use_container_width=True)
+        st.subheader("Uploaded Data Preview")
+        st.dataframe(batch_df.head(), use_container_width=True)
         
-        # Multi-metric comparison
-        metrics_df = comparison_df.melt(id_vars=['Model'], 
-                                       value_vars=['Test Accuracy', 'CV Score', 'AUC'],
-                                       var_name='Metric', value_name='Score')
-        
-        fig2 = px.bar(metrics_df, x='Model', y='Score', color='Metric',
-                     title='Multi-Metric Comparison',
-                     barmode='group')
-        st.plotly_chart(fig2, use_container_width=True)
-        
-        # Radar chart
-        fig3 = go.Figure()
-        for model in comparison_df['Model']:
-            fig3.add_trace(go.Scatterpolar(
-                r=[comparison_df[comparison_df['Model']==model]['Test Accuracy'].values[0],
-                   comparison_df[comparison_df['Model']==model]['CV Score'].values[0],
-                   comparison_df[comparison_df['Model']==model]['AUC'].values[0]],
-                theta=['Test Accuracy', 'CV Score', 'AUC'],
-                fill='toself',
-                name=model
-            ))
-        
-        fig3.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-            showlegend=True,
-            title='Model Performance Radar Chart'
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-    
-    with tab4:
-        st.header("Detailed Results")
-        
-        selected_model = st.selectbox("Select Model for Details", list(results.keys()))
-        
-        if selected_model:
-            model_result = results[selected_model]
-            
-            st.subheader(f"{selected_model} Details")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Best Hyperparameters:**")
-                st.json(model_result['best_params'])
+        if st.button("🚀 Run Batch Predictions", type="primary"):
+            with st.spinner("Processing predictions..."):
+                # Preprocess
+                X_batch, _ = preprocessor.preprocess(
+                    batch_df, 
+                    target_col='income' if 'income' in batch_df.columns else None,
+                    is_training=False
+                )
                 
-                st.write("**Performance Metrics:**")
-                st.write(f"- Test Accuracy: {model_result['test_accuracy']:.4f}")
-                st.write(f"- CV Score: {model_result['cv_score']:.4f}")
-                st.write(f"- AUC: {model_result['auc']:.4f}")
-            
-            with col2:
-                from sklearn.metrics import classification_report
-                st.write("**Classification Report:**")
-                report = classification_report(automl.y_test, 
-                                              model_result['predictions'],
-                                              output_dict=True)
-                st.dataframe(pd.DataFrame(report).transpose())
+                # Predictions
+                predictions = model.predict(X_batch)
+                predictions_proba = model.predict_proba(X_batch)
+                
+                # Add to dataframe
+                results_df = batch_df.copy()
+                results_df['Predicted_Income'] = ['≤50K' if p == 0 else '>50K' for p in predictions]
+                results_df['Probability_Low'] = predictions_proba[:, 0]
+                results_df['Probability_High'] = predictions_proba[:, 1]
+                
+                st.success(f"✅ Processed {len(results_df)} predictions!")
+                
+                # Results summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Records", len(results_df))
+                with col2:
+                    st.metric("Predicted ≤50K", (predictions == 0).sum())
+                with col3:
+                    st.metric("Predicted >50K", (predictions == 1).sum())
+                
+                # Distribution chart
+                fig = px.pie(
+                    values=[(predictions == 0).sum(), (predictions == 1).sum()],
+                    names=['≤50K', '>50K'],
+                    title='Income Distribution in Batch',
+                    color_discrete_sequence=['#ff6b6b', '#51cf66']
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Display results
+                st.subheader("Prediction Results")
+                st.dataframe(results_df, use_container_width=True)
+                
+                # Download button
+                csv = results_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Results as CSV",
+                    data=csv,
+                    file_name='predictions.csv',
+                    mime='text/csv'
+                )
+    else:
+        st.info("👆 Upload a CSV file to get started with batch predictions")
         
-        # Download results
-        st.subheader("Download Results")
-        
-        csv = comparison_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Comparison Table",
-            data=csv,
-            file_name='automl_results.csv',
-            mime='text/csv'
-        )
+        # Show sample format
+        with st.expander("📋 View Required CSV Format"):
+            sample_df = pd.DataFrame({
+                'age': [39, 50],
+                'workclass': ['State-gov', 'Self-emp-not-inc'],
+                'fnlwgt': [77516, 83311],
+                'education': ['Bachelors', 'Bachelors'],
+                'education-num': [13, 13],
+                'marital-status': ['Never-married', 'Married-civ-spouse'],
+                'occupation': ['Adm-clerical', 'Exec-managerial'],
+                'relationship': ['Not-in-family', 'Husband'],
+                'race': ['White', 'White'],
+                'sex': ['Male', 'Male'],
+                'capital-gain': [2174, 0],
+                'capital-loss': [0, 0],
+                'hours-per-week': [40, 13],
+                'native-country': ['United-States', 'United-States']
+            })
+            st.dataframe(sample_df)
 
-else:
-    st.info("👈 Configure your settings and click 'Run AutoML Pipeline' to get started!")
+# ============================================================================
+# TAB 3: MODEL ANALYTICS
+# ============================================================================
+
+with tab3:
+    st.header("Model Performance Analytics")
     
-    # Show example
-    st.subheader("Example Output Preview")
-    st.image("https://via.placeholder.com/800x400.png?text=Model+Comparison+Charts+Will+Appear+Here", 
-             caption="Visualizations will appear here after running the pipeline")
+    # Model comparison
+    st.subheader("📊 Model Comparison")
+    
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('Accuracy Comparison', 'AUC Score Comparison'),
+        specs=[[{'type': 'bar'}, {'type': 'bar'}]]
+    )
+    
+    fig.add_trace(
+        go.Bar(x=comparison_df['Model'], y=comparison_df['Accuracy'], 
+               name='Accuracy', marker_color='lightblue'),
+        row=1, col=1
+    )
+    
+    fig.add_trace(
+        go.Bar(x=comparison_df['Model'], y=comparison_df['AUC'], 
+               name='AUC', marker_color='lightgreen'),
+        row=1, col=2
+    )
+    
+    fig.update_layout(height=500, showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Detailed comparison table
+    st.subheader("📋 Detailed Model Comparison")
+    st.dataframe(
+        comparison_df.style.background_gradient(cmap='RdYlGn', subset=['Accuracy', 'AUC']),
+        use_container_width=True
+    )
+    
+    # Feature importance (if available)
+    if hasattr(model, 'feature_importances_'):
+        st.subheader("🔍 Feature Importance")
+        
+        feature_importance_df = pd.DataFrame({
+            'Feature': metadata['feature_names'],
+            'Importance': model.feature_importances_
+        }).sort_values('Importance', ascending=False).head(15)
+        
+        fig = px.bar(
+            feature_importance_df, 
+            x='Importance', 
+            y='Feature',
+            orientation='h',
+            title='Top 15 Most Important Features',
+            color='Importance',
+            color_continuous_scale='Viridis'
+        )
+        fig.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Model metadata
+    with st.expander("🔧 Complete Model Configuration"):
+        st.json(metadata)
 
-# Footer
+# ============================================================================
+# TAB 4: WHAT-IF ANALYSIS
+# ============================================================================
+
+with tab4:
+    st.header("🧪 What-If Analysis")
+    st.markdown("Explore how changing different features affects the prediction")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Baseline Scenario")
+        base_age = st.slider("Age", 17, 90, 40, key='base_age')
+        base_education = st.slider("Education Years", 1, 16, 13, key='base_edu')
+        base_hours = st.slider("Hours per Week", 1, 99, 40, key='base_hours')
+    
+    with col2:
+        st.subheader("Modified Scenario")
+        mod_age = st.slider("Age", 17, 90, base_age, key='mod_age')
+        mod_education = st.slider("Education Years", 1, 16, base_education, key='mod_edu')
+        mod_hours = st.slider("Hours per Week", 1, 99, base_hours, key='mod_hours')
+    
+    # Create comparison scenarios
+    base_data = pd.DataFrame({
+        'age': [base_age],
+        'workclass': ['Private'],
+        'fnlwgt': [200000],
+        'education': ['Bachelors'],
+        'education-num': [base_education],
+        'marital-status': ['Married-civ-spouse'],
+        'occupation': ['Exec-managerial'],
+        'relationship': ['Husband'],
+        'race': ['White'],
+        'sex': ['Male'],
+        'capital-gain': [0],
+        'capital-loss': [0],
+        'hours-per-week': [base_hours],
+        'native-country': ['United-States']
+    })
+    
+    mod_data = base_data.copy()
+    mod_data['age'] = mod_age
+    mod_data['education-num'] = mod_education
+    mod_data['hours-per-week'] = mod_hours
+    
+    # Make predictions
+    X_base, _ = preprocessor.preprocess(base_data, target_col='income', is_training=False)
+    X_mod, _ = preprocessor.preprocess(mod_data, target_col='income', is_training=False)
+    
+    base_proba = model.predict_proba(X_base)[0][1]
+    mod_proba = model.predict_proba(X_mod)[0][1]
+    
+    # Display comparison
+    st.markdown("---")
+    st.subheader("Comparison Results")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Baseline Probability", f"{base_proba:.1%}")
+    with col2:
+        st.metric("Modified Probability", f"{mod_proba:.1%}", 
+                 delta=f"{(mod_proba - base_proba):.1%}")
+    with col3:
+        change = "Increased" if mod_proba > base_proba else "Decreased"
+        st.metric("Change", change)
+    
+    # Visualization
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=['Baseline', 'Modified'],
+        y=[base_proba * 100, mod_proba * 100],
+        marker_color=['lightblue', 'lightcoral'],
+        text=[f'{base_proba:.1%}', f'{mod_proba:.1%}'],
+        textposition='auto',
+    ))
+    fig.update_layout(
+        title='Probability of Income >50K Comparison',
+        yaxis_title='Probability (%)',
+        yaxis_range=[0, 100]
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# ============================================================================
+# FOOTER
+# ============================================================================
+
 st.markdown("---")
-st.markdown("Built with ❤️ using Streamlit and Scikit-learn")
+st.markdown("""
+<div style='text-align: center; color: #666;'>
+    <p>Built with ❤️ using Streamlit and Scikit-learn</p>
+    <p>Model trained on UCI Adult Income Dataset</p>
+</div>
+""", unsafe_allow_html=True)
