@@ -51,19 +51,19 @@ def load_model_and_metadata():
     """Load the trained model, preprocessor, and metadata"""
     try:
         # Load model
-        with open('best_model.pkl', 'rb') as f:
+        with open('/workspaces/Automl-classification/best_model.pkl', 'rb') as f:
             model = pickle.load(f)
         
         # Load preprocessor
-        with open('preprocessor.pkl', 'rb') as f:
+        with open('/workspaces/Automl-classification/preprocessor.pkl', 'rb') as f:
             preprocessor = pickle.load(f)
         
         # Load metadata
-        with open('model_metadata.json', 'r') as f:
+        with open('/workspaces/Automl-classification/model_metadata.json', 'r') as f:
             metadata = json.load(f)
         
         # Load comparison data
-        comparison_df = pd.read_csv('model_comparison.csv')
+        comparison_df = pd.read_csv('/workspaces/Automl-classification/model_comparison.csv')
         
         return model, preprocessor, metadata, comparison_df
     except FileNotFoundError as e:
