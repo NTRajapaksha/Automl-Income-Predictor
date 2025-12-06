@@ -1,0 +1,81 @@
+{
+  "best_model_name": "LightGBM",
+  "accuracy": 0.8667329686723023,
+  "auc": 0.9248774752180644,
+  "best_params": {
+    "n_estimators": 282,
+    "learning_rate": 0.03820191230518563,
+    "num_leaves": 24
+  },
+  "feature_names": [
+    "age",
+    "workclass",
+    "fnlwgt",
+    "education",
+    "education-num",
+    "marital-status",
+    "occupation",
+    "relationship",
+    "race",
+    "sex",
+    "capital-gain",
+    "capital-loss",
+    "hours-per-week",
+    "native-country"
+  ],
+  "all_results": {
+    "Logistic Regression": {
+      "accuracy": 0.817503729487817,
+      "auc": 0.8500254644656826,
+      "params": {
+        "C": 2.9735104575125613
+      }
+    },
+    "Random Forest": {
+      "accuracy": 0.8606000331510029,
+      "auc": 0.9132858535415591,
+      "params": {
+        "n_estimators": 170,
+        "max_depth": 19,
+        "min_samples_split": 8
+      }
+    },
+    "Gradient Boosting": {
+      "accuracy": 0.8622575832918946,
+      "auc": 0.9221840900134332,
+      "params": {
+        "n_estimators": 133,
+        "learning_rate": 0.14236144640564552,
+        "max_depth": 4
+      }
+    },
+    "XGBoost": {
+      "accuracy": 0.8640808884468755,
+      "auc": 0.9233237460771058,
+      "params": {
+        "n_estimators": 399,
+        "learning_rate": 0.046760070476445,
+        "max_depth": 4,
+        "subsample": 0.7651939863333753
+      }
+    },
+    "LightGBM": {
+      "accuracy": 0.8667329686723023,
+      "auc": 0.9248774752180644,
+      "params": {
+        "n_estimators": 282,
+        "learning_rate": 0.03820191230518563,
+        "num_leaves": 24
+      }
+    },
+    "CatBoost": {
+      "accuracy": 0.8655726835736781,
+      "auc": 0.924379426710094,
+      "params": {
+        "iterations": 300,
+        "learning_rate": 0.1,
+        "depth": 6
+      }
+    }
+  }
+}
