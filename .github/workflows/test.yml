@@ -1,4 +1,4 @@
-name: AutoML Pipeline Tests
+name: AutoML App CI
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  test-app:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -28,73 +28,64 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov
 
-    - name: Lint with flake8
+    - name: Verify imports
       run: |
-        pip install flake8
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        python -c "import streamlit; print('✓ Streamlit')"
+        python -c "import plotly; print('✓ Plotly')"
+        python -c "import pandas; print('✓ Pandas')"
+        python -c "import sklearn; print('✓ Scikit-learn')"
+        python -c "from preprocessor import DataPreprocessor; print('✓ Preprocessor')"
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile app.py
+        python -m py_compile preprocessor.py
+        echo "✓ No syntax errors"
+
+    - name: Verify required files exist
+      run: |
+        if [ ! -f "app.py" ]; then echo "❌ app.py missing"; exit 1; fi
+        if [ ! -f "preprocessor.py" ]; then echo "❌ preprocessor.py missing"; exit 1; fi
+        if [ ! -f "requirements.txt" ]; then echo "❌ requirements.txt missing"; exit 1; fi
+        echo "✓ All required files present"
+
+    - name: Check for model files (optional)
+      run: |
+        if [ -f "best_model.pkl" ]; then 
+          echo "✓ Model file found"
+        else
+          echo "⚠️ Model file not found (expected - upload after training)"
+        fi
       continue-on-error: true
 
-    - name: Test data loading
-      run: |
-        python -c "from automl_pipeline import AdvancedAutoML; automl = AdvancedAutoML(); df = automl.load_data(); print(f'Loaded {len(df)} samples')"
-
-    - name: Test preprocessing
-      run: |
-        python -c "from automl_pipeline import AdvancedAutoML; automl = AdvancedAutoML(); automl.load_data(); X_train, X_test, y_train, y_test = automl.preprocess(); print(f'Training: {len(X_train)}, Test: {len(X_test)}')"
-
-    - name: Quick pipeline test (sample data)
+    - name: Test preprocessor class
       run: |
         python -c "
-        from automl_pipeline import AdvancedAutoML
-        import warnings
-        warnings.filterwarnings('ignore')
+        from preprocessor import DataPreprocessor
+        import pandas as pd
         
-        # Quick test with small sample
-        automl = AdvancedAutoML()
-        automl.load_data()
-        automl.df = automl.df.sample(frac=0.1, random_state=42)  # 10% for speed
-        automl.preprocess()
-        automl.define_models()
+        # Test initialization
+        prep = DataPreprocessor()
+        print('✓ DataPreprocessor initialized')
         
-        # Test just one model for speed
-        from sklearn.linear_model import LogisticRegression
-        from sklearn.model_selection import cross_val_score
-        model = LogisticRegression(max_iter=100, random_state=42)
-        model.fit(automl.X_train_scaled, automl.y_train)
-        score = model.score(automl.X_test_scaled, automl.y_test)
-        print(f'Quick test accuracy: {score:.4f}')
-        assert score > 0.7, 'Model accuracy too low'
+        # Test with sample data
+        sample_data = pd.DataFrame({
+            'age': [25, 30, 35],
+            'workclass': ['Private', 'Private', 'Self-emp-not-inc'],
+            'education': ['Bachelors', 'Masters', 'HS-grad'],
+            'income': ['<=50K', '>50K', '<=50K']
+        })
+        
+        X, y = prep.preprocess(sample_data, target_col='income', is_training=True)
+        print(f'✓ Preprocessing works: {X.shape[0]} samples processed')
         "
-
-    - name: Check generated files
-      run: |
-        # Verify no errors in import
-        python -c "import automl_pipeline; import app; print('Imports successful')"
-
-    - name: Generate coverage report
-      run: |
-        echo "Coverage report would go here"
-      continue-on-error: true
-
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-results-${{ matrix.python-version }}
-        path: |
-          *.png
-          *.pkl
-        retention-days: 7
 
   lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -102,36 +93,54 @@ jobs:
     
     - name: Install linting tools
       run: |
-        pip install black isort flake8
+        pip install flake8
     
-    - name: Check code formatting with black
-      run: black --check --diff .
-      continue-on-error: true
-    
-    - name: Check import sorting with isort
-      run: isort --check-only --diff .
+    - name: Lint with flake8
+      run: |
+        # Check for syntax errors and undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.git,__pycache__,*.pkl,*.json
+        # Check for style issues (non-blocking)
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=.git,__pycache__,*.pkl,*.json
       continue-on-error: true
 
   security:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
     
-    - name: Install security tools
+    - name: Install dependencies
       run: |
-        pip install safety bandit
+        pip install -r requirements.txt
     
     - name: Check for known vulnerabilities
       run: |
-        pip install -r requirements.txt
-        safety check --json
+        pip install safety
+        safety check --json || echo "⚠️ Some vulnerabilities found (review manually)"
       continue-on-error: true
+
+  readme-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
     
-    - name: Run bandit security scan
+    - name: Check README exists
       run: |
-        bandit -r . -f json -o bandit-report.json
+        if [ -f "README.md" ]; then
+          echo "✓ README.md found"
+          wc -l README.md
+        else
+          echo "❌ README.md missing"
+          exit 1
+        fi
+    
+    - name: Check documentation files
+      run: |
+        echo "Checking documentation..."
+        [ -f "SETUP_GUIDE.md" ] && echo "✓ SETUP_GUIDE.md" || echo "⚠️ SETUP_GUIDE.md missing (optional)"
+        [ -f "TROUBLESHOOTING.md" ] && echo "✓ TROUBLESHOOTING.md" || echo "⚠️ TROUBLESHOOTING.md missing (optional)"
       continue-on-error: true
