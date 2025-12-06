@@ -1,0 +1,36 @@
+# Core ML and Data Processing
+pandas
+numpy
+scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+plotly
+
+# Advanced ML (Optional but recommended)
+xgboost
+lightgbm
+# Model Explainability
+shap
+
+# Hyperparameter Optimization
+optuna
+
+# Web Interface
+streamlit
+
+# Jupyter Support
+jupyter
+ipykernel
+notebook
+
+# Statistical Analysis
+scipy
+
+# Progress Bars
+tqdm
+
+# Utilities
+python-dotenv
+joblib
