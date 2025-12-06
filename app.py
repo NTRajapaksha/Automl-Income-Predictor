@@ -12,6 +12,63 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+
+# Import or define the DataPreprocessor class
+try:
+    from preprocessor import DataPreprocessor
+except ImportError:
+    # Define inline if preprocessor.py doesn't exist
+    class DataPreprocessor:
+        """Data preprocessing pipeline - must match the one used in training"""
+        def __init__(self):
+            self.label_encoders = {}
+            self.scaler = StandardScaler()
+            self.feature_names = None
+            self.target_encoder = None
+            
+        def preprocess(self, df, target_col='income', is_training=True):
+            """Preprocess the dataset"""
+            df = df.copy()
+            df = df.dropna()
+            
+            if target_col and target_col in df.columns:
+                X = df.drop(columns=[target_col])
+                y = df[target_col]
+                if y.dtype == 'object':
+                    if is_training:
+                        self.target_encoder = LabelEncoder()
+                        y = self.target_encoder.fit_transform(y)
+                    else:
+                        if self.target_encoder:
+                            y = self.target_encoder.transform(y)
+                else:
+                    y = y.values
+            else:
+                X = df
+                y = None
+            
+            categorical_cols = X.select_dtypes(include=['object']).columns.tolist()
+            numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+            
+            for col in categorical_cols:
+                if is_training:
+                    self.label_encoders[col] = LabelEncoder()
+                    X[col] = self.label_encoders[col].fit_transform(X[col])
+                else:
+                    if col in self.label_encoders:
+                        le = self.label_encoders[col]
+                        X[col] = X[col].apply(lambda x: x if x in le.classes_ else le.classes_[0])
+                        X[col] = le.transform(X[col])
+            
+            if numerical_cols:
+                if is_training:
+                    X[numerical_cols] = self.scaler.fit_transform(X[numerical_cols])
+                    self.feature_names = X.columns.tolist()
+                else:
+                    X[numerical_cols] = self.scaler.transform(X[numerical_cols])
+            
+            return X, y
 
 # Page configuration
 st.set_page_config(
@@ -51,19 +108,19 @@ def load_model_and_metadata():
     """Load the trained model, preprocessor, and metadata"""
     try:
         # Load model
-        with open('/workspaces/Automl-classification/best_model.pkl', 'rb') as f:
+        with open('best_model.pkl', 'rb') as f:
             model = pickle.load(f)
         
         # Load preprocessor
-        with open('/workspaces/Automl-classification/preprocessor.pkl', 'rb') as f:
+        with open('preprocessor.pkl', 'rb') as f:
             preprocessor = pickle.load(f)
         
         # Load metadata
-        with open('/workspaces/Automl-classification/model_metadata.json', 'r') as f:
+        with open('model_metadata.json', 'r') as f:
             metadata = json.load(f)
         
         # Load comparison data
-        comparison_df = pd.read_csv('/workspaces/Automl-classification/model_comparison.csv')
+        comparison_df = pd.read_csv('model_comparison.csv')
         
         return model, preprocessor, metadata, comparison_df
     except FileNotFoundError as e:
