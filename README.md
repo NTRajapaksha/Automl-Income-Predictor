@@ -2,10 +2,10 @@
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.3.0-orange.svg)
-![XGBoost](https://img.shields.io/badge/XGBoost-2.0.0-red.svg)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.27.0-FF4B4B.svg)
+![Python](https://img.shields.io/badge/Python-3.9-blue.svg)
+![Scikit-learn](https://img.shields.io/badge/Scikit--learn-1.7.2-orange.svg)
+![XGBoost](https://img.shields.io/badge/XGBoost-3.1.2-red.svg)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.52.1-FF4B4B.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 **A production-ready machine learning system that predicts income levels using the UCI Adult Income Dataset**
@@ -258,19 +258,19 @@ Navigate to **"📈 Model Analytics"** to view:
 
 **ML Libraries:**
 ```python
-scikit-learn==1.3.0     # Base ML algorithms
-xgboost==2.0.0          # Gradient boosting
-lightgbm==4.1.0         # Fast gradient boosting
+scikit-learn==1.7.2     # Base ML algorithms
+xgboost==3.1.2          # Gradient boosting
+lightgbm==4.6.0         # Fast gradient boosting
 catboost==1.2           # Categorical boosting
-optuna==3.3.0           # Hyperparameter optimization
+optuna==4.6.0           # Hyperparameter optimization
 ```
 
 **Web Framework:**
 ```python
-streamlit==1.27.0       # Web interface
-plotly==5.17.0          # Interactive charts
-pandas==2.0.3           # Data manipulation
-numpy==1.24.3           # Numerical computing
+streamlit==1.52.1       # Web interface
+plotly==6.4.0          # Interactive charts
+pandas==2.3.3           # Data manipulation
+numpy==2.3.4           # Numerical computing
 ```
 
 ---
